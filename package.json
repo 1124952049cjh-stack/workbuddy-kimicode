@@ -1,0 +1,96 @@
+{
+  "name": "workbuddy-to-kimicode",
+  "version": "1.5.1",
+  "private": true,
+  "description": "把 WorkBuddy 桌面端已登录的模型，经本地桥暴露为 OpenAI / Anthropic / Responses 兼容接口，**一键接入 Kimi Code**（主路径）及 Claude Code、Codex、opencode 等客户端；自带可选的 DeepSeek Harness 插件。派生自 Ianzhyh/workbuddy-to-dsh（上游不含 Kimi Code 接入）。",
+  "type": "module",
+  "license": "MIT",
+  "author": "1124952049cjh-stack",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./dsh-plugin/lib/index.js",
+  "exports": {
+    ".": "./dsh-plugin/lib/index.js",
+    "./client": "./dsh-plugin/lib/client.js",
+    "./cordis.patch.yml": "./dsh-plugin/cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bridge",
+    "dashboard",
+    "config.mjs",
+    "cordis.patch.yml",
+    "lib",
+    "dsh-plugin/lib",
+    "dsh-plugin/scripts",
+    "dsh-plugin/vendor",
+    "dsh-plugin/cordis.patch.yml",
+    "dsh-plugin/README.md",
+    "dsh-plugin/package.json",
+    "LICENSE",
+    "NOTICE.md",
+    ".env.example"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "start": "node dashboard/server.mjs",
+    "bridge": "node bridge/workbuddy-bridge.mjs",
+    "connect": "node tools/connect.mjs",
+    "doctor": "node tools/doctor.mjs",
+    "verify": "node tools/verify-atrest.mjs",
+    "test:lib": "node --test lib/find-workbuddy.test.mjs lib/find-dsh.test.mjs lib/find-kimi-code.test.mjs lib/dsh.test.mjs lib/state.test.mjs lib/atrest.test.mjs lib/config.test.mjs lib/diagnostics.quota.test.mjs lib/diagnostics.auth.test.mjs lib/diagnostics.credref.test.mjs lib/config.token-perm.test.mjs lib/client-connect.test.mjs lib/kimi-code-connect.test.mjs lib/test-registry.test.mjs",
+    "test:bridge": "node --test bridge/bridge.test.mjs bridge/bridge-startup.test.mjs bridge/bridge-responses.test.mjs bridge/bridge-cors.test.mjs",
+    "test:plugin": "node --test \"dsh-plugin/tests/*.test.mjs\"",
+    "panel:shot": "node dsh-plugin/tests/panel-render.mjs",
+    "preflight": "node dsh-plugin/scripts/preflight.mjs",
+    "vendor": "node dsh-plugin/scripts/vendor.mjs",
+    "vendor:check": "node dsh-plugin/scripts/vendor.mjs --check",
+    "verify:standalone": "node dsh-plugin/scripts/verify-standalone.mjs",
+    "pack:plugin": "node dsh-plugin/scripts/vendor.mjs && cd dsh-plugin && npm pack",
+    "check:types": "tsc --noEmit -p jsconfig.json",
+    "lint": "eslint .",
+    "release:check": "npm run vendor:check && npm run check:types && npm run lint && npm run test:lib && npm run test:bridge && npm run test:plugin && npm run verify:standalone",
+    "test:ui": "node tools/dev/run-ui-tests.mjs",
+    "panel:i18n": "node dsh-plugin/tests/panel-i18n.mjs",
+    "panel:check": "node dsh-plugin/tests/panel-render.mjs && node dsh-plugin/tests/panel-i18n.mjs",
+    "verify:release": "node tools/dev/verify-release.mjs",
+    "check:i18n": "node tools/dev/check-i18n-coverage.mjs",
+    "check:opencode": "node tools/check-opencode-config.mjs",
+    "pack:dist": "node tools/pack-dist.mjs"
+  },
+  "keywords": [
+    "kimi-code",
+    "kimi-code-plugin",
+    "workbuddy",
+    "codebuddy",
+    "deepseek-harness",
+    "dsh-plugin",
+    "dsh-bundle",
+    "llm-provider",
+    "openai-compatible",
+    "local-bridge"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1124952049cjh-stack/workbuddy-kimicode.git"
+  },
+  "homepage": "https://github.com/1124952049cjh-stack/workbuddy-kimicode#readme",
+  "bugs": {
+    "url": "https://github.com/1124952049cjh-stack/workbuddy-kimicode/issues"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.4",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "typescript": "^7.0.2"
+  }
+}

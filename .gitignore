@@ -1,0 +1,87 @@
+# 依赖与运行时
+node_modules/
+*.log
+
+# 控制台/桥的运行时产物：pid 文件每次启动都变（会造成无意义 diff），
+# out/err 日志含**本机绝对路径**。这里按整个目录忽略，不依赖单条 *.log 侥幸命中。
+logs/
+
+# 构建产物：插件的 tgz 由 `npm run pack:plugin` 生成，走 GitHub Releases 分发，
+# **不入库**（二进制体积会随每次发布膨胀，而且 release 附件本来就有独立存档）
+*.tgz
+*.tar.gz
+
+# 本地用量账本（只记元数据，但属运行时产物）
+usage.jsonl
+
+# 本地配置（可能含机器相关路径）
+.env
+
+# 程序写入的运行时状态（如当前选中的账号）
+.state.json
+
+# 凭据：任何情况下都不得提交
+*.info
+*.info.bak-*
+*.bak-*
+*.bak
+.bridge-tmp
+
+# 本地工作目录（与插件无关的临时/备份/工具产物）
+.backup/
+.trae/
+.workbuddy-ai/
+
+# 生成的设置文件备份
+settings.yaml.bak-*
+.credentials.yaml.bak-*
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# 临时探查产物（asar 抽取、面板渲染用的 React UMD 等）
+.tmp-*
+
+# 含真实账号信息的旧截图（仅本地保留）
+.enhance-preview.local.png
+
+# promo 调试产物（只保留 social-preview.*）
+docs/promo/_*
+docs/promo/_dbg*
+docs/promo/_measure*
+
+# 设计审查用的临时分区截图（tools/dev/shot-regions.mjs 产出）。
+# 它们是**过程材料**：用来放大看细节，看完就该丢，不承担文档职责；
+# 真正要进文档的截图是 docs/screenshot.png 与 docs/clients-panel-*.png。
+docs/_review/
+
+# 发布相关内部笔记（不入库）
+.PUBLISH.local.md
+
+# 宣传文案与投放笔记（本地留存，不入库）
+.promo/
+
+# 优化过程的内部工作区：只保留 SUMMARY.md（它面向读者）。
+# 这里刻意用「忽略整个目录 + 只放行一个文件」的白名单写法，
+# 而不是逐个列举要忽略的文件 —— 过程性材料会不断新增（PR 材料、探针脚本、
+# 对照用的中间产物），逐个列举迟早会漏，而漏掉就意味着误提交内部笔记。
+# 与上面 .promo/ / .PUBLISH.local.md 是同一个意图。
+.optimize/*
+!.optimize/SUMMARY.md
+
+# 插件面板的模型显示偏好（用户本机数据，同 .state.json 一类）
+.model-prefs.json
+
+# 本地回环令牌（首次运行随机生成并落盘，控制台与插件共用）
+# 它是**本机凭据**：提交上去等于把大家的口令都公开，且各人应各有一份。
+.bridge-token
+
+# 本项目运行期间的本地工作记忆（含本机路径等信息，属使用者个人数据）
+.workbuddy/
+
+# 分发包产物（`npm run pack:dist` 生成；里面含运行时快照，不入库）
+dist/

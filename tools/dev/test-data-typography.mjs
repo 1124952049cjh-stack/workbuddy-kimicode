@@ -1,0 +1,167 @@
+/**
+ * 数据排版检查：数字等宽 + 数值列右对齐。
+ *
+ *   node tools/dev/test-data-typography.mjs
+ *
+ * 这是**数据控制台**的两条基本要求，而它们都不是"看起来对不对"能判断的：
+ *
+ * 1. **数字必须等宽**。实测这台机器上 Segoe UI 的 Regular(400)/Bold(700) 用等宽
+ *    数字，而 Medium(500)/Semibold(600) 用比例数字 —— 同一个界面里数字对不对得齐，
+ *    取决于那个元素恰好用了哪个字重。表现是列对不齐、数值刷新时横向抖动。
+ * 2. **数值列必须右对齐**，且**表头要跟着对齐**。左对齐时小数点各起各的，
+ *    量级扫不出来；表头漏了 `.num` 则会与数值差出一大截。
+ *
+ * 判定方式是**直接量渲染宽度**，不是查有没有写某个 CSS 属性 —— 写了也可能不生效。
+ */
+import { startStaticServer, openPage, q, sleep } from './ui-harness.mjs';
+import { baseRoutes, CATALOG } from './fixtures.mjs';
+
+let failures = 0;
+const pass = (m) => console.log('✓ ' + m);
+const fail = (m) => { console.error('✗ ' + m); failures += 1; };
+
+const PORT = 8785;
+const URL_ = `http://127.0.0.1:${PORT}/`;
+
+// 桩数据来自共享夹具（tools/dev/fixtures.mjs）—— 形状由 ui-harness 自动校验。
+// 各工具不再手写桩：字段名写错时页面会静默地不渲染，而这个坑一天踩了三次。
+const routes = baseRoutes();
+
+const server = await startStaticServer(PORT);
+const { cdp, close } = await openPage(URL_, routes, { width: 1440, height: 1200 });
+const cleanup = () => { try { cdp.close(); } catch { /* 忽略 */ } try { server.close(); } catch { /* 忽略 */ } };
+process.on('exit', cleanup);
+
+await sleep(1200);
+
+/*
+ * 先让「已筛选」芯片渲染出来 —— `.filterchip` **只在筛选激活时**才在 DOM 里。
+ * 不先点一下，这一项会永远以「元素不存在」跳过（实测：它和另一个写错类名的目标
+ * 一起，让 12 个目标里有 2 个一直在空跑，而输出里看起来只是"跳过"）。
+ */
+await q(cdp, `(() => {
+  const tr = document.querySelector('#usageBox tr.pickrow');
+  if (tr) { tr.click(); return true; }
+  return false;
+})()`);
+await sleep(500);
+
+/**
+ * 在给定选择器的元素上，量 '1111111111' 与 '8888888888' 的渲染宽度。
+ * 两者不等宽 → 数字是比例字形 → 列对不齐、刷新时抖动。
+ *
+ * **必须克隆元素本身来量，不能新建一个 span 再复制字体**：第一版就是那么做的，
+ * 结果 `-apple-system` 那条栈在新 span 里和在原元素上解析到了不同字体，
+ * 报出「19px 等宽、13.5px 不等宽」这种自相矛盾的结论。克隆能原样继承
+ * 该元素在**真实位置**上的计算样式。
+ */
+const probe = await q(cdp, `(() => {
+  const A = '1111111111';
+  const B = '8888888888';
+  const targets = [
+    ['状态卡大数字', '.card .v'],
+    ['状态卡小数字', '.card .v.small'],
+    ['卡片脚注', '.card .note'],
+    ['用量表数值列', 'td.mono'],
+    ['表头', 'table th'],
+    ['时间戳', '.stamp'],
+    ['接入值', '.valuerow-v'],
+    ['徽章', '.badge'],
+    ['模型标签', '.tag'],
+    ['诊断值', '.diag-row .detail'],
+    ['筛选芯片', '.filterchip'],
+  ];
+  const widthOf = (el, text) => {
+    const c = el.cloneNode(false);      // 同标签、同 class、同位置 → 同计算样式
+    c.textContent = text;
+    c.style.position = 'absolute';
+    c.style.visibility = 'hidden';
+    c.style.whiteSpace = 'pre';
+    c.style.width = 'auto';
+    (el.parentElement || document.body).appendChild(c);
+    const w = c.getBoundingClientRect().width;
+    c.remove();
+    return w;
+  };
+  const out = [];
+  for (const [label, sel] of targets) {
+    const el = document.querySelector(sel);
+    if (!el) { out.push({ label, sel, missing: true }); continue; }
+    const cs = getComputedStyle(el);
+    const wa = widthOf(el, A);
+    const wb = widthOf(el, B);
+    out.push({
+      label,
+      sel,
+      declared: cs.fontVariantNumeric,
+      wa: Number(wa.toFixed(2)),
+      wb: Number(wb.toFixed(2)),
+      delta: Number(Math.abs(wa - wb).toFixed(2)),
+      size: cs.fontSize.replace('px', ''),
+      weight: cs.fontWeight,
+      font: cs.fontFamily.split(',')[0].replace(/["']/g, ''),
+      sample: (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 18),
+    });
+  }
+  return out;
+})()`);
+
+console.log('\n数字宽度一致性（1111111111 vs 8888888888）');
+for (const r of probe) {
+  /*
+   * 元素不存在**算失败，不算跳过**。
+   *
+   * 原先这里是「跳过」——于是写错类名（`.diag-row .s-text`，真实类名是 `.detail`）
+   * 和"条件渲染没触发"长得一模一样，两条目标静默空跑了很久没人发现。
+   * 目标不存在就说明**这一项什么都没测**，必须让作者要么改选择器、要么补状态准备。
+   */
+  if (r.missing) { fail(`${r.label}：选择器 \`${r.sel}\` 没匹配到任何元素 —— 这一项没测到东西`); continue; }
+  if (r.delta < 0.01) pass(`${r.label} 等宽（${r.size}px/${r.weight}，宽 ${r.wa}）`);
+  else fail(`${r.label} 数字不等宽：${r.wa} vs ${r.wb}（差 ${r.delta}px，${r.size}px/${r.weight}）—— 列对不齐、刷新时会横向抖动`);
+}
+
+// ── 数值列的右对齐 ──────────────────────────────────────────────────────
+// 光有等宽数字还不够：左对齐时小数点各起各的，量级依然扫不出来。
+// 这里量的是**表头文字的右缘**与**该列数值的右缘**是否重合 —— 只有两者都右对齐
+// 才会重合；表头漏了 .num 就会差出一大截。
+const align = await q(cdp, `(() => {
+  const rightEdge = (el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const rects = range.getClientRects();
+    return rects.length ? Math.round(rects[rects.length - 1].right) : null;
+  };
+  const out = [];
+  for (const table of document.querySelectorAll('table')) {
+    const ths = [...table.querySelectorAll('thead th')];
+    const tds = [...table.querySelectorAll('tbody tr:first-child td')];
+    ths.forEach((th, i) => {
+      const td = tds[i];
+      if (!td || !td.textContent.trim()) return;
+      out.push({
+        col: (th.textContent || '').trim().slice(0, 10),
+        thAlign: getComputedStyle(th).textAlign,
+        tdAlign: getComputedStyle(td).textAlign,
+        thRight: rightEdge(th),
+        tdRight: rightEdge(td),
+      });
+    });
+  }
+  return out;
+})()`);
+
+console.log('\n数值列对齐（表头右缘 vs 数值右缘）');
+let numericCols = 0;
+for (const x of align) {
+  const isNum = x.tdAlign === 'right' || x.thAlign === 'right';
+  if (!isNum) continue;
+  numericCols += 1;
+  const delta = Math.abs(x.thRight - x.tdRight);
+  if (delta <= 2) pass(`数值列「${x.col}」表头与数值右缘一致（差 ${delta}px）`);
+  else fail(`数值列「${x.col}」表头没跟上：表头右缘 ${x.thRight} vs 数值右缘 ${x.tdRight}，差 ${delta}px`);
+}
+if (numericCols === 0) fail('一个数值列都没找到 —— .num 类可能没生效，或表格没渲染（检查桩数据字段名是否与真实接口一致）');
+
+cleanup();
+console.log(failures === 0 ? '\n全部通过' : `\n${failures} 项失败`);
+process.exit(failures === 0 ? 0 : 1);
